@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="light dark">
+    <title>Запись на услугу</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="business-name">Загрузка...</h1>
+            <p id="business-address"></p>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <label for="client-name">👤 Ваше имя</label>
+                <input type="text" id="client-name" class="input" placeholder="Введите имя" autocomplete="name">
+            </div>
+            
+            <div class="section">
+                <label for="client-phone">📞 Ваш телефон</label>
+                <input type="tel" id="client-phone" class="input" placeholder="+375 XX XXX-XX-XX" autocomplete="tel">
+            </div>
+            
+            <div class="section">
+                <label>💇♀️ Выберите услугу</label>
+                <div id="services-list" class="services-list">
+                    <div class="loading">Загрузка услуг...</div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <label for="client-notes">📝 Пожелания (необязательно)</label>
+                <textarea id="client-notes" class="input" placeholder="Например: французский маникюр" rows="2"></textarea>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <button id="continue-btn" class="btn btn-primary" disabled>Продолжить</button>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+    
+    <script src="js/telegram.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
