@@ -18,14 +18,14 @@ from telebot import types
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 
 # Отключаем логирование Flask для чистоты логов
 import logging as flask_logging
 flask_logging.getLogger('werkzeug').setLevel(flask_logging.ERROR)
 
-# ==================== FLASK-СЕРВЕР ДЛЯ API ====================
-app = Flask(__name__)
+# ==================== FLASK-СЕРВЕР ДЛЯ API И СТАТИКИ ====================
+app = Flask(__name__, static_folder='.', static_url_path='')
 
 # Глобальные переменные для доступа к боту и таблицам
 bot = None
@@ -119,11 +119,18 @@ def add_appointment_api(date, time_start, duration, client_id, service_id, servi
     ])
     return app_id
 
-# ==================== API ЭНДПОИНТЫ ====================
+# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
 @app.route('/')
 def home():
-    return "CRM API is running!"
+    return send_from_directory('.', 'index.html')
 
+@app.route('/<path:filename>')
+def serve_static(filename):
+    if os.path.exists(filename):
+        return send_from_directory('.', filename)
+    return send_from_directory('.', 'index.html')
+
+# ==================== API ЭНДПОИНТЫ ====================
 @app.route('/api/settings', methods=['GET'])
 def api_settings():
     return jsonify({
