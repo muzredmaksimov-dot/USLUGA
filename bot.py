@@ -276,7 +276,6 @@ def update_client_stats(client_id):
     update_client_field(client_id, 6, str(visits))
     update_client_field(client_id, 7, str(int(total)))
     
-    # Обновляем статус лояльности
     if visits >= 10:
         update_client_field(client_id, 5, "VIP")
     elif visits >= 5:
@@ -296,7 +295,6 @@ def get_next_service_id():
 def add_service(name, duration, price):
     service_id = get_next_service_id()
     sheet_services.append_row([str(service_id), name, str(duration), str(price), "Да"])
-    # Архив
     sheet_services_archive.append_row([datetime.now().strftime("%d.%m.%Y %H:%M"), "Создана", str(service_id), name, str(duration), str(price)])
     return service_id
 
@@ -356,7 +354,6 @@ def restore_services_from_archive():
     if len(rows) <= 1:
         return
     
-    # Собираем последние состояния по ID
     latest = {}
     for r in rows[1:]:
         if len(r) >= 6:
@@ -394,7 +391,6 @@ def add_appointment(date, time_start, duration, client_id, service_id, service_t
         str(app_id), date, time_start, str(duration), time_end,
         str(client_id), str(service_id), service_text, str(price), "Ожидание", notes
     ])
-    # Обновляем статистику клиента
     update_client_stats(client_id)
     return app_id
 
@@ -467,18 +463,15 @@ def reschedule_appointment(app_id, new_date, new_time):
     return new_id
 
 def is_time_available(date_str, time_start, duration, exclude_app_id=None):
-    """Проверяет, свободно ли время"""
     new_start = datetime.strptime(time_start, "%H:%M")
     new_end = new_start + timedelta(minutes=duration)
     
-    # Проверка рабочего времени
     work_start = datetime.strptime(get_setting("work_start", "10:00"), "%H:%M")
     work_end = datetime.strptime(get_setting("work_end", "20:00"), "%H:%M")
     
     if new_start < work_start or new_end > work_end:
         return False, "Вне рабочего времени"
     
-    # Проверка пересечений
     appointments = get_appointments_by_date(date_str)
     break_minutes = int(get_setting("break_minutes", "10"))
     
@@ -494,34 +487,44 @@ def is_time_available(date_str, time_start, duration, exclude_app_id=None):
     return True, None
 
 def get_free_slots(date_str, duration):
-    """Возвращает список свободных слотов на дату"""
+    """Возвращает список свободных слотов на дату с учётом рабочего времени и перерывов"""
     work_start = datetime.strptime(get_setting("work_start", "10:00"), "%H:%M")
     work_end = datetime.strptime(get_setting("work_end", "20:00"), "%H:%M")
     break_minutes = int(get_setting("break_minutes", "10"))
     
     appointments = get_appointments_by_date(date_str)
-    busy_slots = []
+    
+    # Преобразуем записи в интервалы занятости (с учётом перерыва после каждой)
+    busy_intervals = []
     for app in appointments:
         start = datetime.strptime(app[2], "%H:%M")
         end = start + timedelta(minutes=int(app[3]) + break_minutes)
-        busy_slots.append((start, end))
+        busy_intervals.append((start, end))
     
-    busy_slots.sort(key=lambda x: x[0])
+    # Сортируем по времени начала
+    busy_intervals.sort(key=lambda x: x[0])
     
     free_slots = []
-    current = work_start
+    current_time = work_start
     
-    for start, end in busy_slots:
-        if current < start:
-            slot_end = start
-            if (slot_end - current).total_seconds() / 60 >= duration:
-                free_slots.append(current.strftime("%H:%M"))
-        if end > current:
-            current = end
+    for busy_start, busy_end in busy_intervals:
+        # Проверяем все возможные слоты до начала занятого интервала
+        while current_time + timedelta(minutes=duration) <= busy_start:
+            free_slots.append(current_time.strftime("%H:%M"))
+            # Сдвигаемся на 30 минут для поиска следующего слота
+            current_time += timedelta(minutes=30)
+        
+        # Перемещаем current_time к концу занятого интервала, если он внутри него
+        if current_time < busy_end:
+            current_time = busy_end
     
-    if current < work_end:
-        if (work_end - current).total_seconds() / 60 >= duration:
-            free_slots.append(current.strftime("%H:%M"))
+    # Добавляем слоты после последней записи до конца рабочего дня
+    while current_time + timedelta(minutes=duration) <= work_end:
+        free_slots.append(current_time.strftime("%H:%M"))
+        current_time += timedelta(minutes=30)
+    
+    # Убираем дубликаты и сортируем
+    free_slots = sorted(list(set(free_slots)))
     
     return free_slots
 
@@ -593,17 +596,10 @@ def check_reminders():
             reminder_client = int(get_setting("reminder_client_hours", "24"))
             reminder_master = int(get_setting("reminder_master_hours", "1"))
             
-            # Напоминание клиенту
+            # Напоминание клиенту (будет работать когда добавим Telegram ID клиентов)
             if reminder_client - 0.5 < time_left <= reminder_client + 0.5:
                 if client:
-                    msg = f"🔔 Напоминание о записи!\n\n"
-                    msg += f"Завтра в {app_time} у вас запись:\n"
-                    msg += f"💇♀️ {r[7]}\n"
-                    address = get_setting("address", "")
-                    if address:
-                        msg += f"📍 {address}\n"
-                    msg += f"\nДо встречи! ❤️"
-                    # Отправка клиенту (если есть telegram_id)
+                    pass  # Здесь будет отправка клиенту
             
             # Напоминание мастеру
             if reminder_master - 0.5 < time_left <= reminder_master + 0.5:
@@ -628,7 +624,6 @@ def cmd_start(message):
     user_state[chat_id] = None
     user_data[chat_id] = {}
     
-    # Восстанавливаем услуги из архива при старте
     restore_services_from_archive()
     
     business_name = get_setting("business_name", "Мастер")
@@ -777,11 +772,28 @@ def handle_message(message):
         bot.send_message(chat_id, "📅 Выберите дату:", reply_markup=kb)
         return
     
+    elif state == "APPT_TIME_MANUAL":
+        time_str = text.strip()
+        date_str = user_data[chat_id].get("appt_date")
+        duration = user_data[chat_id].get("appt_duration", 120)
+        
+        if not re.match(r'^\d{1,2}:\d{2}$', time_str):
+            bot.send_message(chat_id, "❌ Неверный формат. Введите время как ЧЧ:ММ (например, 14:00):")
+            return
+        
+        available, reason = is_time_available(date_str, time_str, duration)
+        if available:
+            user_data[chat_id]["appt_time"] = time_str
+            user_state[chat_id] = "APPT_NOTES"
+            bot.send_message(chat_id, "📝 Введите заметку к визиту (или '-' пропустить):")
+        else:
+            bot.send_message(chat_id, f"⛔ {reason}\nВведите другое время:")
+        return
+    
     elif state == "APPT_NOTES":
         notes = text
         user_data[chat_id]["appt_notes"] = notes
         
-        # Создаём запись
         client_id = user_data[chat_id].get("appt_client_id")
         service_id = user_data[chat_id].get("appt_service_id", "0")
         service_text = user_data[chat_id].get("appt_service_text", "")
@@ -799,7 +811,7 @@ def handle_message(message):
         msg += f"📅 {date} {time_start}\n"
         msg += f"⏰ {duration} минут\n"
         msg += f"💰 {price} BYN"
-        if notes:
+        if notes and notes != "-":
             msg += f"\n📝 {notes}"
         
         bot.send_message(chat_id, msg, reply_markup=appointment_action_buttons(app_id))
@@ -945,10 +957,6 @@ def handle_message(message):
         bot.send_message(chat_id, "Главное меню:", reply_markup=main_menu())
         return
     
-    elif state == "RESCHEDULE_DATE":
-        # Обрабатывается через callback
-        pass
-    
     elif state == "SETTING_VALUE":
         key = user_data[chat_id].get("setting_key")
         if key:
@@ -1004,7 +1012,6 @@ def show_client_card(chat_id, client):
     if client['notes']:
         msg += f"\n\n📝 **Заметки:**\n{client['notes']}"
     
-    # История записей
     rows = sheet_appointments.get_all_values()
     history = []
     for r in rows[1:]:
@@ -1166,7 +1173,6 @@ def handle_callback(call):
     chat_id = call.message.chat.id
     data = call.data
     
-    # Главное меню
     if data == "main_menu":
         bot.edit_message_text("🏠 Главное меню", chat_id, call.message.message_id)
         bot.send_message(chat_id, "Выберите действие:", reply_markup=main_menu())
@@ -1312,6 +1318,11 @@ def handle_callback(call):
             kb.add(types.InlineKeyboardButton("Ввести время вручную", callback_data="appt_time_manual"))
             kb.add(types.InlineKeyboardButton("🔙 Выбрать другую дату", callback_data="appt_back_to_cal"))
             bot.edit_message_text(f"🟡 Нет свободных слотов на {date_str}.", chat_id, call.message.message_id, reply_markup=kb)
+        bot.answer_callback_query(call.id)
+    
+    elif data == "appt_back_to_cal":
+        kb = get_calendar_keyboard(callback_prefix="appt_date")
+        bot.edit_message_text("📅 Выберите дату:", chat_id, call.message.message_id, reply_markup=kb)
         bot.answer_callback_query(call.id)
     
     elif data == "appt_time_manual":
@@ -1558,11 +1569,9 @@ def handle_callback(call):
 
 # ==================== ЗАПУСК ====================
 def main():
-    # Планировщик проверки напоминаний каждые 15 минут
     scheduler.add_job(check_reminders, 'interval', minutes=15)
     scheduler.start()
     
-    # Очистка вебхуков
     try:
         requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=5)
         logger.info("✅ Старые вебхуки очищены")
