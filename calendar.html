@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="light dark">
+    <title>Выбор даты и времени</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button id="back-btn" class="btn-back">← Назад</button>
+            <h2>Дата и время</h2>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <label>📅 Дата</label>
+                <div id="calendar" class="calendar">
+                    <div class="calendar-header">
+                        <button id="prev-month" class="calendar-nav">←</button>
+                        <span id="current-month">Апрель 2026</span>
+                        <button id="next-month" class="calendar-nav">→</button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+                    </div>
+                    <div id="calendar-days" class="calendar-days"></div>
+                </div>
+            </div>
+            
+            <div class="section" id="time-section" style="display: none;">
+                <label>⏰ Время</label>
+                <div id="time-slots" class="time-slots"></div>
+            </div>
+            
+            <div class="section" id="selected-info" style="display: none;">
+                <div class="selected-card">
+                    <div class="selected-icon">💇♀️</div>
+                    <div class="selected-details">
+                        <span id="selected-service"></span>
+                        <span id="selected-datetime"></span>
+                        <span id="selected-price"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <button id="continue-calendar-btn" class="btn btn-primary" disabled>Продолжить</button>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+    
+    <script src="js/telegram.js"></script>
+    <script src="js/calendar.js"></script>
+</body>
+</html>
