@@ -7,14 +7,26 @@ tg.expand();
 
 // Настройка темы
 function applyTheme() {
-    const theme = tg.colorScheme || 'light';
-    document.documentElement.style.setProperty('--tg-theme-bg-color', tg.backgroundColor || (theme === 'dark' ? '#1c1c1e' : '#ffffff'));
-    document.documentElement.style.setProperty('--tg-theme-text-color', tg.textColor || (theme === 'dark' ? '#ffffff' : '#000000'));
-    document.documentElement.style.setProperty('--tg-theme-hint-color', tg.hintColor || '#8e8e93');
-    document.documentElement.style.setProperty('--tg-theme-link-color', tg.linkColor || (theme === 'dark' ? '#0a84ff' : '#007aff'));
-    document.documentElement.style.setProperty('--tg-theme-button-color', tg.buttonColor || (theme === 'dark' ? '#0a84ff' : '#007aff'));
-    document.documentElement.style.setProperty('--tg-theme-button-text-color', tg.buttonTextColor || '#ffffff');
-    document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', tg.secondaryBackgroundColor || (theme === 'dark' ? '#2c2c2e' : '#f2f2f7'));
+    const themeParams = tg.themeParams;
+    
+    if (themeParams.bg_color) {
+        document.documentElement.style.setProperty('--bg-primary', themeParams.bg_color);
+    }
+    if (themeParams.secondary_bg_color) {
+        document.documentElement.style.setProperty('--bg-secondary', themeParams.secondary_bg_color);
+    }
+    if (themeParams.text_color) {
+        document.documentElement.style.setProperty('--text-primary', themeParams.text_color);
+    }
+    if (themeParams.hint_color) {
+        document.documentElement.style.setProperty('--text-secondary', themeParams.hint_color);
+    }
+    if (themeParams.button_color) {
+        document.documentElement.style.setProperty('--primary', themeParams.button_color);
+    }
+    if (themeParams.button_text_color) {
+        document.documentElement.style.setProperty('--button-text', themeParams.button_text_color);
+    }
 }
 
 applyTheme();
@@ -22,10 +34,13 @@ tg.onEvent('themeChanged', applyTheme);
 
 // Получение данных пользователя
 function getUserData() {
+    const user = tg.initDataUnsafe?.user;
     return {
-        id: tg.initDataUnsafe?.user?.id || null,
-        first_name: tg.initDataUnsafe?.user?.first_name || '',
-        username: tg.initDataUnsafe?.user?.username || ''
+        id: user?.id || null,
+        first_name: user?.first_name || '',
+        last_name: user?.last_name || '',
+        username: user?.username || '',
+        photo_url: user?.photo_url || ''
     };
 }
 
@@ -61,4 +76,20 @@ const API_URL = window.location.origin;
 // Закрытие Mini App
 function closeApp() {
     tg.close();
+}
+
+// Форматирование даты для отображения
+function formatDisplayDate(dateStr) {
+    const [year, month, day] = dateStr.split('-');
+    const monthNames = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                       'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    return `${parseInt(day)} ${monthNames[parseInt(month) - 1]}`;
+}
+
+// Форматирование даты для API
+function formatAPIDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
