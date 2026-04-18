@@ -2,60 +2,68 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="color-scheme" content="light dark">
-    <title>Выбор даты и времени</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>Дата и время</title>
+    <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <button id="back-btn" class="btn-back">← Назад</button>
-            <h2>Дата и время</h2>
+    <div class="app">
+        <!-- Шапка с прогрессом -->
+        <div class="progress-bar">
+            <div class="progress-step completed">✓</div>
+            <div class="progress-line completed"></div>
+            <div class="progress-step active">2</div>
+            <div class="progress-line"></div>
+            <div class="progress-step">3</div>
         </div>
         
-        <div class="content">
-            <div class="section">
-                <label>📅 Дата</label>
-                <div id="calendar" class="calendar">
-                    <div class="calendar-header">
-                        <button id="prev-month" class="calendar-nav">←</button>
-                        <span id="current-month">Апрель 2026</span>
-                        <button id="next-month" class="calendar-nav">→</button>
+        <div class="screen active">
+            <div class="screen-header">
+                <button id="back-btn" class="back-btn">← Назад</button>
+                <h2>Дата и время</h2>
+            </div>
+            
+            <div class="screen-content">
+                <!-- Выбранная услуга -->
+                <div class="selected-service-card">
+                    <div class="service-icon">💇♀️</div>
+                    <div class="service-info">
+                        <span id="selected-service-name">Маникюр</span>
+                        <span id="selected-service-details">2 часа · 80 BYN</span>
                     </div>
-                    <div class="calendar-weekdays">
+                </div>
+                
+                <!-- Календарь -->
+                <div class="section-title">Выберите дату</div>
+                <div class="calendar-wrapper">
+                    <div class="calendar-header">
+                        <button id="prev-month" class="month-nav">←</button>
+                        <span id="current-month">Апрель 2026</span>
+                        <button id="next-month" class="month-nav">→</button>
+                    </div>
+                    <div class="weekdays">
                         <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
                     </div>
-                    <div id="calendar-days" class="calendar-days"></div>
+                    <div id="calendar-days" class="calendar-grid"></div>
+                </div>
+                
+                <!-- Время -->
+                <div id="time-section" class="time-section" style="display: none;">
+                    <div class="section-title">Выберите время</div>
+                    <div id="time-slots" class="time-grid"></div>
                 </div>
             </div>
             
-            <div class="section" id="time-section" style="display: none;">
-                <label>⏰ Время</label>
-                <div id="time-slots" class="time-slots"></div>
+            <div class="screen-footer">
+                <button id="continue-calendar-btn" class="primary-btn" disabled>Продолжить →</button>
             </div>
-            
-            <div class="section" id="selected-info" style="display: none;">
-                <div class="selected-card">
-                    <div class="selected-icon">💇♀️</div>
-                    <div class="selected-details">
-                        <span id="selected-service"></span>
-                        <span id="selected-datetime"></span>
-                        <span id="selected-price"></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <button id="continue-calendar-btn" class="btn btn-primary" disabled>Продолжить</button>
         </div>
     </div>
     
     <div id="toast" class="toast"></div>
-    
-    <script src="js/telegram.js"></script>
-    <script src="js/calendar.js"></script>
+    <script src="telegram.js"></script>
+    <script src="calendar.js"></script>
 </body>
 </html>
