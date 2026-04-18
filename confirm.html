@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="light dark">
+    <title>Подтверждение</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button id="back-btn" class="btn-back">← Назад</button>
+            <h2>Подтверждение</h2>
+        </div>
+        
+        <div class="content">
+            <div class="confirm-card">
+                <div class="confirm-icon">✅</div>
+                <h3>Проверьте данные</h3>
+                
+                <div class="confirm-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Услуга</span>
+                        <span id="confirm-service" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Дата и время</span>
+                        <span id="confirm-datetime" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Длительность</span>
+                        <span id="confirm-duration" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Стоимость</span>
+                        <span id="confirm-price" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Имя</span>
+                        <span id="confirm-name" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Телефон</span>
+                        <span id="confirm-phone" class="detail-value"></span>
+                    </div>
+                    <div class="detail-row" id="notes-row" style="display: none;">
+                        <span class="detail-label">Пожелания</span>
+                        <span id="confirm-notes" class="detail-value"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <button id="confirm-btn" class="btn btn-primary">Подтвердить запись</button>
+        </div>
+    </div>
+    
+    <div id="toast" class="toast"></div>
+    
+    <script src="js/telegram.js"></script>
+    <script src="js/confirm.js"></script>
+</body>
+</html>
