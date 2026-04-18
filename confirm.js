@@ -1,3 +1,4 @@
+// confirm.js
 document.addEventListener('DOMContentLoaded', () => {
     const backBtn = document.getElementById('back-btn');
     const confirmBtn = document.getElementById('confirm-btn');
@@ -52,7 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
             
             if (result.success) {
-                saveData('appointment', { id: result.appointment_id, ...bookingData });
+                saveData('appointment', { 
+                    id: result.appointment_id, 
+                    ...bookingData 
+                });
                 window.location.href = 'success.html';
             } else {
                 showToast(result.error || 'Ошибка создания записи');
@@ -67,15 +71,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    function formatDisplayDate(dateStr) {
-        const [year, month, day] = dateStr.split('-');
-        const monthNames = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                           'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-        return `${parseInt(day)} ${monthNames[parseInt(month) - 1]}`;
-    }
-    
     tg.BackButton.show();
     tg.BackButton.onClick(() => {
         window.location.href = 'calendar.html';
     });
+});
+```
+
+---
+
+📄 5. success.js — Экран успешной записи
+
+```javascript
+// success.js
+document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.getElementById('close-btn');
+    const appointmentIdEl = document.getElementById('appointment-id');
+    const successService = document.getElementById('success-service');
+    const successDatetime = document.getElementById('success-datetime');
+    const successPrice = document.getElementById('success-price');
+    
+    const bookingData = loadData('booking');
+    const appointmentData = loadData('appointment');
+    
+    if (bookingData && appointmentData) {
+        appointmentIdEl.textContent = `#${appointmentData.id}`;
+        successService.textContent = bookingData.service_name;
+        
+        const displayDate = formatDisplayDate(bookingData.date);
+        successDatetime.textContent = `${displayDate} в ${bookingData.time}`;
+        successPrice.textContent = `${bookingData.price} BYN`;
+    }
+    
+    closeBtn.addEventListener('click', () => {
+        clearData();
+        closeApp();
+    });
+    
+    tg.BackButton.hide();
+    
+    // Анимация появления
+    setTimeout(() => {
+        document.querySelector('.success-circle').style.animation = 'none';
+    }, 400);
 });
