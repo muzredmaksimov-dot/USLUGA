@@ -19,6 +19,9 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, request, jsonify
+# Отключаем логирование Flask для чистоты логов
+import logging as flask_logging
+flask_logging.getLogger('werkzeug').setLevel(flask_logging.ERROR)
 
 # ==================== FLASK-СЕРВЕР ДЛЯ API ====================
 app = Flask(__name__)
@@ -1474,24 +1477,42 @@ def main():
     scheduler.add_job(check_reminders, 'interval', minutes=15)
     scheduler.start()
     
-    try:
-        requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=5)
-        logger.info("✅ Старые вебхуки очищены")
-    except Exception as e:
-        logger.warning(f"⚠️ Не удалось очистить вебхуки: {e}")
+    # Принудительно завершаем старые сессии Telegram
+    max_retries = 3
+    for i in range(max_retries):
+        try:
+            # Удаляем вебхук и сбрасываем pending updates
+            requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
+            logger.info("✅ Старые вебхуки очищены")
+            time.sleep(2)  # Даём время API обработать
+            break
+        except Exception as e:
+            logger.warning(f"⚠️ Попытка {i+1}/{max_retries} не удалась: {e}")
+            time.sleep(3)
     
     # Запускаем Flask в отдельном потоке
     threading.Thread(target=run_flask, daemon=True).start()
     logger.info("🌐 API-сервер запущен")
     logger.info("🤖 Бот запущен...")
     
+    # Основной цикл с обработкой ошибок 409
     while True:
         try:
-            bot.polling(none_stop=True)
+            bot.polling(none_stop=True, timeout=60, long_polling_timeout=60)
         except Exception as e:
+            error_str = str(e)
             logger.error(f"❌ Ошибка polling: {e}")
-            logger.info("🔄 Перезапуск через 5 секунд...")
-            time.sleep(5)
+            
+            if "409" in error_str or "Conflict" in error_str:
+                logger.info("🔄 Обнаружен конфликт, очищаем сессии...")
+                try:
+                    requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
+                    time.sleep(5)
+                except:
+                    pass
+            else:
+                logger.info("🔄 Перезапуск через 5 секунд...")
+                time.sleep(5)
 
 if __name__ == "__main__":
     main()
