@@ -1,113 +1,25 @@
-// confirm.js
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('Confirm page loaded');
+document.addEventListener('DOMContentLoaded',()=>{
+    const backBtn=document.getElementById('back-btn'),confirmBtn=document.getElementById('confirm-btn');
+    const bookingData=loadData('booking');
+    if(!bookingData){showToast('Ошибка');setTimeout(()=>window.location.href='index.html',1500);return}
     
-    const backBtn = document.getElementById('back-btn');
-    const confirmBtn = document.getElementById('confirm-btn');
+    document.getElementById('confirm-service').textContent=bookingData.service_name;
+    document.getElementById('confirm-datetime').textContent=formatDisplayDate(bookingData.date)+' в '+bookingData.time;
+    document.getElementById('confirm-duration').textContent=bookingData.duration+' минут';
+    document.getElementById('confirm-price').textContent=bookingData.price+' BYN';
+    document.getElementById('confirm-name').textContent=bookingData.name;
+    document.getElementById('confirm-phone').textContent=bookingData.phone;
+    if(bookingData.notes){document.getElementById('notes-row').style.display='flex';document.getElementById('confirm-notes').textContent=bookingData.notes}
     
-    // Загружаем данные
-    const bookingData = loadData('booking');
-    console.log('Booking data:', bookingData);
-    
-    if (!bookingData) {
-        console.error('No booking data found');
-        showToast('Ошибка: данные не найдены');
-        setTimeout(() => window.location.href = 'index.html', 1500);
-        return;
-    }
-    
-    // Заполняем поля
-    const fields = {
-        'confirm-service': bookingData.service_name || '—',
-        'confirm-duration': `${bookingData.duration || 0} минут`,
-        'confirm-price': `${bookingData.price || 0} BYN`,
-        'confirm-name': bookingData.name || '—',
-        'confirm-phone': bookingData.phone || '—'
-    };
-    
-    // Дата и время
-    if (bookingData.date && bookingData.time) {
-        const displayDate = formatDisplayDate(bookingData.date);
-        fields['confirm-datetime'] = `${displayDate} в ${bookingData.time}`;
-    }
-    
-    // Заполняем все поля
-    for (const [id, value] of Object.entries(fields)) {
-        const el = document.getElementById(id);
-        if (el) {
-            el.textContent = value;
-            console.log(`Set ${id} = ${value}`);
-        } else {
-            console.error(`Element #${id} not found`);
-        }
-    }
-    
-    // Заметки
-    if (bookingData.notes) {
-        const notesRow = document.getElementById('notes-row');
-        const confirmNotes = document.getElementById('confirm-notes');
-        if (notesRow) notesRow.style.display = 'flex';
-        if (confirmNotes) confirmNotes.textContent = bookingData.notes;
-    }
-    
-    // Кнопка Назад
-    backBtn.addEventListener('click', () => {
-        window.location.href = 'calendar.html';
+    backBtn.addEventListener('click',()=>window.location.href='calendar.html');
+    confirmBtn.addEventListener('click',async()=>{
+        confirmBtn.disabled=true;confirmBtn.textContent='Отправка...';
+        try{
+            const r=await fetch(API_URL+'/api/appointment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:bookingData.name,phone:bookingData.phone,service_id:bookingData.service_id,date:bookingData.date,time:bookingData.time,notes:bookingData.notes})});
+            const d=await r.json();
+            if(d.success){saveData('appointment',{id:d.appointment_id,...bookingData});window.location.href='success.html'}
+            else{showToast(d.error||'Ошибка');confirmBtn.disabled=false;confirmBtn.textContent='Подтвердить запись'}
+        }catch(e){showToast('Ошибка соединения');confirmBtn.disabled=false;confirmBtn.textContent='Подтвердить запись'}
     });
-    
-    // Кнопка Подтвердить
-    confirmBtn.addEventListener('click', async () => {
-        console.log('Confirm button clicked');
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Отправка...';
-        
-        try {
-            const user = getUserData();
-            console.log('User data:', user);
-            
-            const requestData = {
-                name: bookingData.name,
-                phone: bookingData.phone,
-                service_id: bookingData.service_id,
-                date: bookingData.date,
-                time: bookingData.time,
-                notes: bookingData.notes || '',
-                telegram_id: user.id || null
-            };
-            
-            console.log('Sending request:', requestData);
-            
-            const response = await fetch(`${API_URL}/api/appointment`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestData)
-            });
-            
-            const result = await response.json();
-            console.log('Response:', result);
-            
-            if (result.success) {
-                saveData('appointment', { 
-                    id: result.appointment_id, 
-                    ...bookingData 
-                });
-                showToast('Запись создана!');
-                window.location.href = 'success.html';
-            } else {
-                showToast(result.error || 'Ошибка создания записи');
-                confirmBtn.disabled = false;
-                confirmBtn.textContent = 'Подтвердить запись';
-            }
-        } catch (error) {
-            console.error('Fetch error:', error);
-            showToast('Ошибка соединения с сервером');
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Подтвердить запись';
-        }
-    });
-    
-    tg.BackButton.show();
-    tg.BackButton.onClick(() => {
-        window.location.href = 'calendar.html';
-    });
+    tg.BackButton.show();tg.BackButton.onClick(()=>window.location.href='calendar.html');
 });
