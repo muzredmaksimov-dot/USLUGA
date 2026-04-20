@@ -10,9 +10,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, request, jsonify, send_from_directory
 
+# --- Логирование ---
 import logging as flask_logging
 flask_logging.getLogger('werkzeug').setLevel(flask_logging.ERROR)
 
+# --- Flask для API ---
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 bot = None
@@ -20,7 +22,7 @@ sheet_clients = sheet_services = sheet_appointments = sheet_settings = sheet_ser
 ADMIN_ID = 0
 user_state, user_data = {}, {}
 
-# --- API ---
+# ==================== API ДЛЯ MINI APP (ТОЛЬКО ЭТО НОВОЕ) ====================
 def get_setting_api(k, d=""):
     try:
         for r in sheet_settings.get_all_values()[1:]:
@@ -72,6 +74,7 @@ def add_appointment_api(date, time_start, duration, client_id, service_id, servi
     app_id = str(len(rows))
     time_end = (datetime.strptime(time_start,"%H:%M")+timedelta(minutes=duration)).strftime("%H:%M")
     sheet_appointments.append_row([app_id, date, time_start, str(duration), time_end, str(client_id), str(service_id), service_text, str(price), "Ожидание", notes])
+    update_client_stats(client_id)
     return app_id
 
 @app.route('/')
@@ -146,7 +149,7 @@ def run_flask():
     port = int(os.environ.get("PORT",10000))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
-# --- Настройки ---
+# ==================== НАСТРОЙКИ (СТАРЫЙ РАБОЧИЙ КОД) ====================
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 SHEET_ID = os.getenv("SHEET_ID")
@@ -313,7 +316,8 @@ def handle(msg):
     if not is_admin(msg):
         url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME','your-app.onrender.com')}"
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("📱 Записаться", web_app=types.WebAppInfo(url=url)))
-        bot.send_message(chat_id, "Нажмите кнопку 👇", reply_markup=kb); return
+        bot.send_message(chat_id, "Нажмите кнопку 👇", reply_markup=kb)
+        return
     
     if chat_id not in user_state: user_state[chat_id] = None; user_data[chat_id] = {}
     state = user_state[chat_id]
