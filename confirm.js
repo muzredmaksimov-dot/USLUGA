@@ -4,25 +4,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmBtn = document.getElementById('confirm-btn');
     
     const bookingData = loadData('booking');
+    
     if (!bookingData) {
         showToast('Ошибка: данные не найдены');
         setTimeout(() => window.location.href = 'index.html', 1500);
         return;
     }
     
-    // Заполнение данных
-    document.getElementById('confirm-service').textContent = bookingData.service_name;
+    // Заполнение данных с проверкой
+    const confirmService = document.getElementById('confirm-service');
+    const confirmDatetime = document.getElementById('confirm-datetime');
+    const confirmDuration = document.getElementById('confirm-duration');
+    const confirmPrice = document.getElementById('confirm-price');
+    const confirmName = document.getElementById('confirm-name');
+    const confirmPhone = document.getElementById('confirm-phone');
+    const notesRow = document.getElementById('notes-row');
+    const confirmNotes = document.getElementById('confirm-notes');
     
-    const displayDate = formatDisplayDate(bookingData.date);
-    document.getElementById('confirm-datetime').textContent = `${displayDate} в ${bookingData.time}`;
-    document.getElementById('confirm-duration').textContent = `${bookingData.duration} минут`;
-    document.getElementById('confirm-price').textContent = `${bookingData.price} BYN`;
-    document.getElementById('confirm-name').textContent = bookingData.name;
-    document.getElementById('confirm-phone').textContent = bookingData.phone;
+    if (confirmService) confirmService.textContent = bookingData.service_name || '—';
+    
+    if (confirmDatetime && bookingData.date && bookingData.time) {
+        const displayDate = formatDisplayDate(bookingData.date);
+        confirmDatetime.textContent = `${displayDate} в ${bookingData.time}`;
+    }
+    
+    if (confirmDuration) confirmDuration.textContent = `${bookingData.duration || 0} минут`;
+    if (confirmPrice) confirmPrice.textContent = `${bookingData.price || 0} BYN`;
+    if (confirmName) confirmName.textContent = bookingData.name || '—';
+    if (confirmPhone) confirmPhone.textContent = bookingData.phone || '—';
     
     if (bookingData.notes) {
-        document.getElementById('notes-row').style.display = 'flex';
-        document.getElementById('confirm-notes').textContent = bookingData.notes;
+        if (notesRow) notesRow.style.display = 'flex';
+        if (confirmNotes) confirmNotes.textContent = bookingData.notes;
     }
     
     backBtn.addEventListener('click', () => {
@@ -80,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 ---
 
-📄 5. success.js — Экран успешной записи
+📄 5. success.js — Исправленное отображение
 
 ```javascript
 // success.js
@@ -94,13 +107,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookingData = loadData('booking');
     const appointmentData = loadData('appointment');
     
-    if (bookingData && appointmentData) {
+    if (appointmentIdEl && appointmentData) {
         appointmentIdEl.textContent = `#${appointmentData.id}`;
-        successService.textContent = bookingData.service_name;
+    }
+    
+    if (bookingData) {
+        if (successService) successService.textContent = bookingData.service_name || '—';
+        if (successPrice) successPrice.textContent = `${bookingData.price || 0} BYN`;
         
-        const displayDate = formatDisplayDate(bookingData.date);
-        successDatetime.textContent = `${displayDate} в ${bookingData.time}`;
-        successPrice.textContent = `${bookingData.price} BYN`;
+        if (successDatetime && bookingData.date && bookingData.time) {
+            const displayDate = formatDisplayDate(bookingData.date);
+            successDatetime.textContent = `${displayDate} в ${bookingData.time}`;
+        }
     }
     
     closeBtn.addEventListener('click', () => {
@@ -109,9 +127,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     tg.BackButton.hide();
-    
-    // Анимация появления
-    setTimeout(() => {
-        document.querySelector('.success-circle').style.animation = 'none';
-    }, 400);
 });
