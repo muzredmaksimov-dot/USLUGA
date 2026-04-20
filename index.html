@@ -11,7 +11,7 @@
 <body>
     <div class="app">
         <!-- Шапка с прогрессом -->
-        <div class="progress-bar">
+        <div class="progress-bar" id="progress-bar">
             <div class="progress-step active">1</div>
             <div class="progress-line"></div>
             <div class="progress-step">2</div>
@@ -19,23 +19,52 @@
             <div class="progress-step">3</div>
         </div>
         
-        <div class="screen active" id="screen-service">
+        <!-- Экран выбора действия -->
+        <div class="screen active" id="screen-action">
             <div class="screen-header">
                 <h1 id="business-name">Загрузка...</h1>
                 <p id="business-address"></p>
             </div>
             
             <div class="screen-content">
-                <!-- Профиль из Telegram -->
+                <div class="action-cards">
+                    <div class="action-card" data-action="book">
+                        <div class="action-icon">📅</div>
+                        <div class="action-title">Новая запись</div>
+                        <div class="action-desc">Записаться на услугу</div>
+                    </div>
+                    
+                    <div class="action-card" data-action="reschedule">
+                        <div class="action-icon">🔄</div>
+                        <div class="action-title">Перенести запись</div>
+                        <div class="action-desc">Изменить дату или время</div>
+                    </div>
+                    
+                    <div class="action-card" data-action="cancel">
+                        <div class="action-icon">❌</div>
+                        <div class="action-title">Отменить запись</div>
+                        <div class="action-desc">Отказаться от записи</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Экран ввода данных (скрыт изначально) -->
+        <div class="screen" id="screen-booking">
+            <div class="screen-header">
+                <button class="back-btn" id="back-from-booking">← Назад</button>
+                <h2 id="booking-title">Новая запись</h2>
+            </div>
+            
+            <div class="screen-content">
                 <div class="profile-card">
-                    <div class="profile-avatar" id="user-avatar"></div>
+                    <div class="profile-avatar" id="user-avatar">👤</div>
                     <div class="profile-info">
                         <input type="text" id="client-name" class="clean-input name-input" placeholder="Ваше имя">
                         <input type="tel" id="client-phone" class="clean-input phone-input" placeholder="+375 XX XXX-XX-XX">
                     </div>
                 </div>
                 
-                <!-- Услуги -->
                 <div class="section-title">Выберите услугу</div>
                 <div id="services-list" class="services-grid">
                     <div class="loading-state">
@@ -44,13 +73,33 @@
                     </div>
                 </div>
                 
-                <!-- Пожелания -->
                 <div class="section-title">Пожелания</div>
                 <textarea id="client-notes" class="notes-input" placeholder="Напишите, если есть особые пожелания..." rows="2"></textarea>
             </div>
             
             <div class="screen-footer">
                 <button id="continue-btn" class="primary-btn" disabled>Продолжить →</button>
+            </div>
+        </div>
+        
+        <!-- Экран поиска записи для переноса/отмены -->
+        <div class="screen" id="screen-find">
+            <div class="screen-header">
+                <button class="back-btn" id="back-from-find">← Назад</button>
+                <h2 id="find-title">Найти запись</h2>
+            </div>
+            
+            <div class="screen-content">
+                <div class="section-title">Введите номер записи или телефон</div>
+                <input type="text" id="search-query" class="clean-input" placeholder="#123 или +375 XX XXX-XX-XX" style="font-size: 18px; padding: 16px; background: var(--bg-secondary); border-radius: 16px;">
+                
+                <div id="search-result" class="search-result" style="display: none;">
+                    <!-- Результаты поиска -->
+                </div>
+            </div>
+            
+            <div class="screen-footer">
+                <button id="search-btn" class="primary-btn" disabled>Найти</button>
             </div>
         </div>
     </div>
