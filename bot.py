@@ -74,22 +74,34 @@ def add_appointment_api(date, time_start, duration, client_id, service_id, servi
     sheet_appointments.append_row([app_id, date, time_start, str(duration), time_end, str(client_id), str(service_id), service_text, str(price), "Ожидание", notes])
     return app_id
 
-@app.route('/') ; def home(): return send_from_directory('.','index.html')
+@app.route('/')
+def home():
+    return send_from_directory('.','index.html')
+
 @app.route('/<path:filename>')
 def serve_static(filename):
     if os.path.exists(filename): return send_from_directory('.',filename)
     return send_from_directory('.','index.html')
-@app.route('/api/settings') ; def api_settings(): return jsonify({"business_name":get_setting_api("business_name","Мастер"),"address":get_setting_api("address","")})
-@app.route('/api/services') ; def api_services(): return jsonify({"services":get_active_services_api()})
+
+@app.route('/api/settings')
+def api_settings():
+    return jsonify({"business_name":get_setting_api("business_name","Мастер"),"address":get_setting_api("address","")})
+
+@app.route('/api/services')
+def api_services():
+    return jsonify({"services":get_active_services_api()})
+
 @app.route('/api/slots')
 def api_slots():
-    date = request.args.get('date'); sid = request.args.get('service_id')
+    date = request.args.get('date')
+    sid = request.args.get('service_id')
     if not date: return jsonify({"error":"date required"}),400
     dur = 120
     if sid:
         for s in get_active_services_api():
             if s['id']==sid: dur=s['duration']; break
     return jsonify({"slots":get_free_slots_api(date,dur)})
+
 @app.route('/api/appointment', methods=['POST'])
 def api_appointment():
     d = request.json
@@ -104,6 +116,7 @@ def api_appointment():
     app_id = add_appointment_api(date,time,dur,cid,sid or "0",stext,price,notes)
     if ADMIN_ID: bot.send_message(ADMIN_ID, f"🆕 #{app_id}\n👤 {name}\n📞 {phone}\n💇‍♀️ {stext}\n📅 {date} {time}\n💰 {price} BYN")
     return jsonify({"success":True,"appointment_id":app_id})
+
 @app.route('/api/appointment/find')
 def api_find():
     q = request.args.get('query','').strip().replace('#','')
@@ -119,6 +132,7 @@ def api_find():
             if c and search_phone in re.sub(r'\D','',c['phone']):
                 return jsonify({"appointment":{"id":r[0],"date":r[1],"time":r[2],"service":r[7],"price":r[8],"status":r[9],"client_name":c['name'],"client_phone":c['phone']}})
     return jsonify({"appointment":None})
+
 @app.route('/api/appointment/cancel', methods=['POST'])
 def api_cancel():
     app_id = request.json.get('appointment_id')
@@ -134,8 +148,10 @@ def run_flask():
 
 # --- Настройки ---
 load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN"); SHEET_ID = os.getenv("SHEET_ID")
-GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDENTIALS"); ADMIN_ID = int(os.getenv("ADMIN_ID","0"))
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+SHEET_ID = os.getenv("SHEET_ID")
+GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDENTIALS")
+ADMIN_ID = int(os.getenv("ADMIN_ID","0"))
 if not GOOGLE_CREDS_JSON: raise ValueError("❌ GOOGLE_CREDENTIALS не задан")
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -149,7 +165,8 @@ def init_sheet(name, headers):
     try: return sh.worksheet(name)
     except:
         ws = sh.add_worksheet(title=name, rows=1000, cols=len(headers))
-        ws.append_row(headers); return ws
+        ws.append_row(headers)
+        return ws
 
 sheet_clients = init_sheet("Клиенты", ["ID","Имя","Телефон","Заметки","Статус","Визиты","Сумма"])
 sheet_services = init_sheet("Услуги", ["ID","Название","Длительность","Цена","Активна"])
