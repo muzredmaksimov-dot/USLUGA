@@ -3,77 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="color-scheme" content="light dark">
     <title>Подтверждение</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div class="app">
-        <!-- Шапка с прогрессом -->
-        <div class="progress-bar">
-            <div class="progress-step completed">✓</div>
-            <div class="progress-line completed"></div>
-            <div class="progress-step completed">✓</div>
-            <div class="progress-line completed"></div>
-            <div class="progress-step active">3</div>
-        </div>
-        
-        <div class="screen active">
-            <div class="screen-header">
-                <button id="back-btn" class="back-btn">← Назад</button>
-                <h2>Подтверждение</h2>
-            </div>
-            
-            <div class="screen-content">
-                <div class="confirm-card">
-                    <div class="confirm-header">
-                        <div class="check-icon">✓</div>
-                        <h3>Проверьте данные</h3>
-                    </div>
-                    
-                    <div class="confirm-details">
-                        <div class="detail-row">
-                            <span class="label">Услуга</span>
-                            <span id="confirm-service" class="value"></span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="label">Дата и время</span>
-                            <span id="confirm-datetime" class="value highlight"></span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="label">Длительность</span>
-                            <span id="confirm-duration" class="value"></span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="label">Стоимость</span>
-                            <span id="confirm-price" class="value price"></span>
-                        </div>
-                        <div class="divider"></div>
-                        <div class="detail-row">
-                            <span class="label">Имя</span>
-                            <span id="confirm-name" class="value"></span>
-                        </div>
-                        <div class="detail-row">
-                            <span class="label">Телефон</span>
-                            <span id="confirm-phone" class="value"></span>
-                        </div>
-                        <div id="notes-row" class="detail-row" style="display: none;">
-                            <span class="label">Пожелания</span>
-                            <span id="confirm-notes" class="value"></span>
-                        </div>
-                    </div>
+<div class="app">
+    <div class="progress-bar"><div class="progress-step completed">✓</div><div class="progress-line completed"></div><div class="progress-step completed">✓</div><div class="progress-line completed"></div><div class="progress-step active">3</div></div>
+    <div class="screen active">
+        <div class="screen-header"><button class="back-btn" id="back-btn">← Назад</button><h2>Подтверждение</h2></div>
+        <div class="screen-content">
+            <div class="confirm-card"><div class="confirm-header"><div class="check-icon">✓</div><h3>Проверьте данные</h3></div>
+                <div class="confirm-details">
+                    <div class="detail-row"><span class="label">Услуга</span><span id="confirm-service" class="value"></span></div>
+                    <div class="detail-row"><span class="label">Дата и время</span><span id="confirm-datetime" class="value highlight"></span></div>
+                    <div class="detail-row"><span class="label">Длительность</span><span id="confirm-duration" class="value"></span></div>
+                    <div class="detail-row"><span class="label">Стоимость</span><span id="confirm-price" class="value price"></span></div>
+                    <div class="divider"></div>
+                    <div class="detail-row"><span class="label">Имя</span><span id="confirm-name" class="value"></span></div>
+                    <div class="detail-row"><span class="label">Телефон</span><span id="confirm-phone" class="value"></span></div>
+                    <div id="notes-row" class="detail-row" style="display:none;"><span class="label">Пожелания</span><span id="confirm-notes" class="value"></span></div>
                 </div>
             </div>
-            
-            <div class="screen-footer">
-                <button id="confirm-btn" class="primary-btn">Подтвердить запись</button>
-            </div>
         </div>
+        <div class="screen-footer"><button id="confirm-btn" class="primary-btn">Подтвердить запись</button></div>
     </div>
-    
-    <div id="toast" class="toast"></div>
-    <script src="telegram.js"></script>
-    <script src="confirm.js"></script>
+</div>
+<div id="toast" class="toast"></div>
+<script src="telegram.js"></script>
+<script src="confirm.js"></script>
 </body>
 </html>
