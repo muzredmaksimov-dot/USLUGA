@@ -20,14 +20,14 @@ from oauth2client.service_account import ServiceAccountCredentials
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, request, jsonify, send_from_directory
 
-# Отключаем логирование Flask для чистоты логов
+# Отключаем логирование Flask
 import logging as flask_logging
 flask_logging.getLogger('werkzeug').setLevel(flask_logging.ERROR)
 
-# ==================== FLASK-СЕРВЕР ДЛЯ API И СТАТИКИ ====================
+# ==================== FLASK-СЕРВЕР ====================
 app = Flask(__name__, static_folder='.', static_url_path='')
 
-# Глобальные переменные для доступа к боту и таблицам
+# Глобальные переменные
 bot = None
 sheet_clients = None
 sheet_services = None
@@ -109,6 +109,13 @@ def get_client_by_phone(phone):
             return {"id": r[0], "name": r[1], "phone": r[2]}
     return None
 
+def get_client_by_id_api(client_id):
+    rows = sheet_clients.get_all_values()
+    for r in rows[1:]:
+        if len(r) > 0 and r[0] == str(client_id):
+            return {"id": r[0], "name": r[1], "phone": r[2]}
+    return None
+
 def add_appointment_api(date, time_start, duration, client_id, service_id, service_text, price, notes=""):
     rows = sheet_appointments.get_all_values()
     app_id = str(len(rows))
@@ -166,64 +173,181 @@ def api_slots():
 
 @app.route('/api/appointment', methods=['POST'])
 def api_appointment():
-    data = request.json
-    
-    name = data.get('name')
-    phone = data.get('phone')
-    service_id = data.get('service_id')
-    service_text = data.get('service_text', '')
-    date = data.get('date')
-    time = data.get('time')
-    notes = data.get('notes', '')
-    
-    if not all([name, phone, date, time]):
-        return jsonify({"error": "missing required fields"}), 400
-    
-    if not service_id and not service_text:
-        return jsonify({"error": "service_id or service_text required"}), 400
-    
-    client = get_client_by_phone(phone)
-    if not client:
-        client_id = add_client_api(name, phone, notes)
-        client = {"id": client_id, "name": name}
-    else:
-        client_id = client['id']
-    
-    price = 0
-    duration = int(get_setting_api("default_duration", "120"))
-    
-    if service_id:
-        services = get_active_services_api()
-        for s in services:
-            if s['id'] == service_id:
-                service_text = s['name']
-                price = s['price']
-                duration = s['duration']
-                break
-    
-    app_id = add_appointment_api(date, time, duration, client_id, service_id or "0", service_text, price, notes)
-    
-    business_name = get_setting_api("business_name", "Мастер")
-    msg = f"🆕 Новая запись через Mini App!\n\n"
-    msg += f"👤 {name}\n"
-    msg += f"📞 {phone}\n"
-    msg += f"💇♀️ {service_text}\n"
-    msg += f"📅 {date} в {time}\n"
-    msg += f"💰 {price} BYN"
-    if notes:
-        msg += f"\n📝 {notes}"
-    
     try:
-        if ADMIN_ID:
-            bot.send_message(ADMIN_ID, msg)
+        data = request.json
+        logger.info(f"API appointment request: {data}")
+        
+        name = data.get('name')
+        phone = data.get('phone')
+        service_id = data.get('service_id')
+        service_text = data.get('service_text', '')
+        date = data.get('date')
+        time = data.get('time')
+        notes = data.get('notes', '')
+        
+        if not all([name, phone, date, time]):
+            return jsonify({"error": "missing required fields"}), 400
+        
+        if not service_id and not service_text:
+            return jsonify({"error": "service_id or service_text required"}), 400
+        
+        # Находим или создаём клиента
+        client = get_client_by_phone(phone)
+        if not client:
+            client_id = add_client_api(name, phone, notes)
+            client = {"id": client_id, "name": name}
+        else:
+            client_id = client['id']
+        
+        price = 0
+        duration = int(get_setting_api("default_duration", "120"))
+        
+        if service_id:
+            services = get_active_services_api()
+            for s in services:
+                if s['id'] == service_id:
+                    service_text = s['name']
+                    price = s['price']
+                    duration = s['duration']
+                    break
+        
+        app_id = add_appointment_api(date, time, duration, client_id, service_id or "0", service_text, price, notes)
+        
+        # Уведомление мастеру
+        business_name = get_setting_api("business_name", "Мастер")
+        msg = f"🆕 Новая запись через Mini App!\n\n"
+        msg += f"👤 {name}\n"
+        msg += f"📞 {phone}\n"
+        msg += f"💇‍♀️ {service_text}\n"
+        msg += f"📅 {date} в {time}\n"
+        msg += f"💰 {price} BYN"
+        if notes:
+            msg += f"\n📝 {notes}"
+        
+        try:
+            if ADMIN_ID:
+                bot.send_message(ADMIN_ID, msg)
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления: {e}")
+        
+        return jsonify({
+            "success": True,
+            "appointment_id": app_id,
+            "message": "Запись успешно создана!"
+        })
     except Exception as e:
-        logger.error(f"Ошибка отправки уведомления: {e}")
+        logger.error(f"API appointment error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/appointment/find', methods=['GET'])
+def api_find_appointment():
+    query = request.args.get('query', '')
+    if not query:
+        return jsonify({"error": "query required"}), 400
     
-    return jsonify({
-        "success": True,
-        "appointment_id": app_id,
-        "message": "Запись успешно создана!"
-    })
+    rows = sheet_appointments.get_all_values()
+    for r in rows[1:]:
+        if len(r) >= 10:
+            # Поиск по ID записи или по телефону клиента
+            client = get_client_by_id_api(r[5]) if len(r) > 5 else None
+            if r[0] == query or (client and query in client.get('phone', '')):
+                return jsonify({
+                    "appointment": {
+                        "id": r[0],
+                        "date": r[1],
+                        "time": r[2],
+                        "duration": r[3],
+                        "service": r[7],
+                        "price": r[8],
+                        "status": r[9],
+                        "notes": r[10] if len(r) > 10 else "",
+                        "client_name": client['name'] if client else "",
+                        "client_phone": client['phone'] if client else ""
+                    }
+                })
+    
+    return jsonify({"appointment": None})
+
+@app.route('/api/appointment/cancel', methods=['POST'])
+def api_cancel_appointment():
+    try:
+        data = request.json
+        app_id = data.get('appointment_id')
+        
+        if not app_id:
+            return jsonify({"error": "appointment_id required"}), 400
+        
+        # Обновляем статус
+        cell = sheet_appointments.find(str(app_id), in_column=1)
+        if cell:
+            sheet_appointments.update_cell(cell.row, 10, "Отмена")
+            
+            # Уведомление мастеру
+            app = None
+            for r in sheet_appointments.get_all_values()[1:]:
+                if len(r) > 0 and r[0] == str(app_id):
+                    app = r
+                    break
+            
+            if app and ADMIN_ID:
+                client = get_client_by_id_api(app[5]) if len(app) > 5 else None
+                msg = f"❌ Запись #{app_id} отменена через Mini App\n"
+                msg += f"👤 {client['name'] if client else 'Клиент'}\n"
+                msg += f"📅 {app[1]} в {app[2]}"
+                bot.send_message(ADMIN_ID, msg)
+            
+            return jsonify({"success": True})
+        
+        return jsonify({"error": "Appointment not found"}), 404
+    except Exception as e:
+        logger.error(f"API cancel error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/appointment/reschedule', methods=['POST'])
+def api_reschedule_appointment():
+    try:
+        data = request.json
+        app_id = data.get('appointment_id')
+        new_date = data.get('date')
+        new_time = data.get('time')
+        
+        if not all([app_id, new_date, new_time]):
+            return jsonify({"error": "missing required fields"}), 400
+        
+        # Находим старую запись
+        old_app = None
+        for r in sheet_appointments.get_all_values()[1:]:
+            if len(r) > 0 and r[0] == str(app_id):
+                old_app = r
+                break
+        
+        if not old_app:
+            return jsonify({"error": "Appointment not found"}), 404
+        
+        # Создаём новую запись
+        new_id = add_appointment_api(
+            new_date, new_time, 
+            int(old_app[3]), old_app[5], old_app[6], old_app[7], old_app[8],
+            f"(перенесено с {old_app[1]} {old_app[2]})"
+        )
+        
+        # Отмечаем старую как перенесённую
+        cell = sheet_appointments.find(str(app_id), in_column=1)
+        if cell:
+            sheet_appointments.update_cell(cell.row, 10, "Перенесена")
+        
+        # Уведомление мастеру
+        if ADMIN_ID:
+            client = get_client_by_id_api(old_app[5]) if len(old_app) > 5 else None
+            msg = f"🔄 Запись #{app_id} перенесена\n"
+            msg += f"👤 {client['name'] if client else 'Клиент'}\n"
+            msg += f"📅 {old_app[1]} {old_app[2]} → {new_date} {new_time}"
+            bot.send_message(ADMIN_ID, msg)
+        
+        return jsonify({"success": True, "new_appointment_id": new_id})
+    except Exception as e:
+        logger.error(f"API reschedule error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -716,7 +840,7 @@ def main_menu():
     keyboard.row("➕ Новая запись", "🔍 Найти клиента")
     keyboard.row("📅 Сегодня", "📅 Завтра")
     keyboard.row("📋 Все записи", "👥 Клиенты")
-    keyboard.row("💇♀️ Мои услуги", "📊 Статистика")
+    keyboard.row("💇‍♀️ Мои услуги", "📊 Статистика")
     keyboard.row("⚙️ Настройки", "📊 Таблица")
     keyboard.row("📱 Mini App")
     return keyboard
@@ -773,7 +897,7 @@ def check_reminders():
                 msg = f"🔔 Запись через {reminder_master} час!\n\n"
                 msg += f"👤 {client['name'] if client else 'Клиент'}\n"
                 msg += f"📞 {client['phone'] if client else ''}\n"
-                msg += f"💇♀️ {r[7]}\n"
+                msg += f"💇‍♀️ {r[7]}\n"
                 msg += f"📅 Сегодня в {app_time}\n"
                 msg += f"💰 {r[8]} BYN"
                 bot.send_message(ADMIN_ID, msg)
@@ -800,15 +924,16 @@ def cmd_start(message):
         business_name = get_setting("business_name", "Мастер")
         address = get_setting("address", "")
         
-        msg = f"💇♀️ **{business_name}**\n"
+        msg = f"💇‍♀️ **{business_name}**\n"
         if address:
             msg += f"📍 {address}\n"
-        msg += "\nДобро пожаловать! Запишитесь онлайн за пару кликов 👇"
+        msg += "\nДобро пожаловать! Запишитесь онлайн 👇"
         
         kb = types.InlineKeyboardMarkup()
+        app_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-app.onrender.com')}"
         kb.add(types.InlineKeyboardButton(
             "📱 Записаться онлайн",
-            web_app=types.WebAppInfo(url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-app.onrender.com')}")
+            web_app=types.WebAppInfo(url=app_url)
         ))
         
         bot.send_message(chat_id, msg, reply_markup=kb, parse_mode='Markdown')
@@ -826,13 +951,14 @@ def handle_message(message):
     if not is_admin(message):
         business_name = get_setting("business_name", "Мастер")
         kb = types.InlineKeyboardMarkup()
+        app_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-app.onrender.com')}"
         kb.add(types.InlineKeyboardButton(
             "📱 Записаться онлайн",
-            web_app=types.WebAppInfo(url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-app.onrender.com')}")
+            web_app=types.WebAppInfo(url=app_url)
         ))
         bot.send_message(
             chat_id,
-            f"💇♀️ **{business_name}**\n\nНажмите кнопку ниже, чтобы записаться 👇",
+            f"💇‍♀️ **{business_name}**\n\nНажмите кнопку ниже, чтобы записаться 👇",
             reply_markup=kb,
             parse_mode='Markdown'
         )
@@ -874,7 +1000,7 @@ def handle_message(message):
                 show_appointment_card(chat_id, app)
         return
     
-    elif text == "💇♀️ Мои услуги":
+    elif text == "💇‍♀️ Мои услуги":
         show_services_list(chat_id)
         return
     
@@ -892,8 +1018,9 @@ def handle_message(message):
         return
     
     elif text == "📱 Mini App":
-        bot.send_message(chat_id, "Нажмите кнопку ниже, чтобы открыть окно записи:", reply_markup=types.InlineKeyboardMarkup().add(
-            types.InlineKeyboardButton("📱 Открыть запись", web_app=types.WebAppInfo(url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-app.onrender.com')}"))
+        app_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'your-app.onrender.com')}"
+        bot.send_message(chat_id, "Нажмите кнопку ниже:", reply_markup=types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton("📱 Открыть запись", web_app=types.WebAppInfo(url=app_url))
         ))
         return
     
@@ -901,266 +1028,8 @@ def handle_message(message):
         user_state[chat_id] = None
         bot.send_message(chat_id, "Главное меню:", reply_markup=main_menu())
         return
-    
-    if state == "APPT_SEARCH_CLIENT":
-        if text == "➕ Новый клиент":
-            user_state[chat_id] = "APPT_NEW_CLIENT_NAME"
-            bot.send_message(chat_id, "👤 Введите имя клиента:")
-        else:
-            clients = search_clients(text)
-            if clients:
-                show_client_selection(chat_id, clients, for_appointment=True)
-            else:
-                kb = types.InlineKeyboardMarkup()
-                kb.add(types.InlineKeyboardButton("➕ Создать нового", callback_data="appt_new_client"))
-                bot.send_message(chat_id, f"❌ Клиент '{text}' не найден. Создать нового?", reply_markup=kb)
-        return
-    
-    elif state == "APPT_NEW_CLIENT_NAME":
-        user_data[chat_id]["new_client_name"] = text
-        user_state[chat_id] = "APPT_NEW_CLIENT_PHONE"
-        bot.send_message(chat_id, "📞 Введите телефон клиента:")
-        return
-    
-    elif state == "APPT_NEW_CLIENT_PHONE":
-        name = user_data[chat_id].get("new_client_name", "")
-        phone = text
-        client_id = add_client(name, phone)
-        user_data[chat_id]["appt_client_id"] = client_id
-        user_data[chat_id]["appt_client_name"] = name
-        user_state[chat_id] = "APPT_SELECT_SERVICE"
-        
-        services = get_active_services()
-        if services:
-            show_service_selection(chat_id, services)
-        else:
-            bot.send_message(chat_id, "💇♀️ Введите название услуги:")
-            user_state[chat_id] = "APPT_MANUAL_SERVICE"
-        return
-    
-    elif state == "APPT_MANUAL_SERVICE":
-        user_data[chat_id]["appt_service_text"] = text
-        user_data[chat_id]["appt_service_id"] = "0"
-        user_state[chat_id] = "APPT_DURATION"
-        default_duration = int(get_setting("default_duration", "120"))
-        bot.send_message(chat_id, f"⏰ Введите длительность в минутах (по умолчанию {default_duration}):")
-        return
-    
-    elif state == "APPT_DURATION":
-        try:
-            duration = int(text) if text.strip() else int(get_setting("default_duration", "120"))
-        except:
-            duration = int(get_setting("default_duration", "120"))
-        user_data[chat_id]["appt_duration"] = duration
-        user_state[chat_id] = "APPT_PRICE"
-        bot.send_message(chat_id, "💰 Введите стоимость (только число):")
-        return
-    
-    elif state == "APPT_PRICE":
-        try:
-            price = int(text) if text.strip() else 0
-        except:
-            price = 0
-        user_data[chat_id]["appt_price"] = price
-        user_state[chat_id] = "APPT_DATE"
-        kb = get_calendar_keyboard(callback_prefix="appt_date")
-        bot.send_message(chat_id, "📅 Выберите дату:", reply_markup=kb)
-        return
-    
-    elif state == "APPT_TIME_MANUAL":
-        time_str = text.strip()
-        date_str = user_data[chat_id].get("appt_date")
-        duration = user_data[chat_id].get("appt_duration", 120)
-        
-        if not re.match(r'^\d{1,2}:\d{2}$', time_str):
-            bot.send_message(chat_id, "❌ Неверный формат. Введите время как ЧЧ:ММ (например, 14:00):")
-            return
-        
-        available, reason = is_time_available(date_str, time_str, duration)
-        if available:
-            user_data[chat_id]["appt_time"] = time_str
-            user_state[chat_id] = "APPT_NOTES"
-            bot.send_message(chat_id, "📝 Введите заметку к визиту (или '-' пропустить):")
-        else:
-            bot.send_message(chat_id, f"⛔ {reason}\nВведите другое время:")
-        return
-    
-    elif state == "APPT_NOTES":
-        notes = text
-        user_data[chat_id]["appt_notes"] = notes
-        
-        client_id = user_data[chat_id].get("appt_client_id")
-        service_id = user_data[chat_id].get("appt_service_id", "0")
-        service_text = user_data[chat_id].get("appt_service_text", "")
-        duration = user_data[chat_id].get("appt_duration", 120)
-        price = user_data[chat_id].get("appt_price", 0)
-        date = user_data[chat_id].get("appt_date")
-        time_start = user_data[chat_id].get("appt_time")
-        
-        app_id = add_appointment(date, time_start, duration, client_id, service_id, service_text, price, notes)
-        
-        client = get_client_by_id(client_id)
-        msg = f"✅ Запись #{app_id} создана!\n\n"
-        msg += f"👤 {client['name'] if client else 'Клиент'}\n"
-        msg += f"💇♀️ {service_text}\n"
-        msg += f"📅 {date} {time_start}\n"
-        msg += f"⏰ {duration} минут\n"
-        msg += f"💰 {price} BYN"
-        if notes and notes != "-":
-            msg += f"\n📝 {notes}"
-        
-        bot.send_message(chat_id, msg, reply_markup=appointment_action_buttons(app_id))
-        bot.send_message(chat_id, "Главное меню:", reply_markup=main_menu())
-        user_state[chat_id] = None
-        user_data[chat_id] = {}
-        return
-    
-    elif state == "SEARCH_CLIENT":
-        clients = search_clients(text)
-        if clients:
-            show_client_selection(chat_id, clients, for_appointment=False)
-        else:
-            bot.send_message(chat_id, f"❌ Клиент '{text}' не найден.", reply_markup=main_menu())
-        user_state[chat_id] = None
-        return
-    
-    elif state == "EDIT_CLIENT_NAME":
-        client_id = user_data[chat_id].get("edit_client_id")
-        if update_client_field(client_id, 2, text):
-            bot.send_message(chat_id, f"✅ Имя изменено")
-        user_state[chat_id] = None
-        show_client_card_by_id(chat_id, client_id)
-        return
-    
-    elif state == "EDIT_CLIENT_PHONE":
-        client_id = user_data[chat_id].get("edit_client_id")
-        if update_client_field(client_id, 3, text):
-            bot.send_message(chat_id, f"✅ Телефон изменён")
-        user_state[chat_id] = None
-        show_client_card_by_id(chat_id, client_id)
-        return
-    
-    elif state == "EDIT_CLIENT_NOTE":
-        client_id = user_data[chat_id].get("edit_client_id")
-        if text == "-":
-            text = ""
-        if update_client_field(client_id, 4, text):
-            bot.send_message(chat_id, f"✅ Заметка сохранена")
-        user_state[chat_id] = None
-        show_client_card_by_id(chat_id, client_id)
-        return
-    
-    elif state == "ADD_SERVICE_NAME":
-        user_data[chat_id]["new_service_name"] = text
-        user_state[chat_id] = "ADD_SERVICE_DURATION"
-        kb = types.InlineKeyboardMarkup(row_width=3)
-        for d in [30, 60, 90, 120, 150, 180]:
-            kb.add(types.InlineKeyboardButton(f"{d} мин", callback_data=f"service_dur_{d}"))
-        kb.add(types.InlineKeyboardButton("Другое (ввести)", callback_data="service_dur_manual"))
-        bot.send_message(chat_id, "⏰ Выберите длительность:", reply_markup=kb)
-        return
-    
-    elif state == "ADD_SERVICE_DURATION_MANUAL":
-        try:
-            duration = int(text)
-            user_data[chat_id]["new_service_duration"] = duration
-            user_state[chat_id] = "ADD_SERVICE_PRICE"
-            bot.send_message(chat_id, "💰 Введите стоимость:")
-        except:
-            bot.send_message(chat_id, "❌ Введите число:")
-        return
-    
-    elif state == "ADD_SERVICE_PRICE":
-        try:
-            price = int(text)
-            name = user_data[chat_id].get("new_service_name", "")
-            duration = user_data[chat_id].get("new_service_duration", 120)
-            service_id = add_service(name, duration, price)
-            bot.send_message(chat_id, f"✅ Услуга '{name}' добавлена!")
-            show_services_list(chat_id)
-        except:
-            bot.send_message(chat_id, "❌ Введите число:")
-            return
-        user_state[chat_id] = None
-        user_data[chat_id] = {}
-        return
-    
-    elif state == "EDIT_SERVICE_NAME":
-        service_id = user_data[chat_id].get("edit_service_id")
-        if update_service_field(service_id, 2, text):
-            sheet_services_archive.append_row([datetime.now().strftime("%d.%m.%Y %H:%M"), "Изменена", str(service_id), text, "", ""])
-            bot.send_message(chat_id, f"✅ Название изменено")
-        user_state[chat_id] = None
-        show_services_list(chat_id)
-        return
-    
-    elif state == "EDIT_SERVICE_PRICE":
-        service_id = user_data[chat_id].get("edit_service_id")
-        try:
-            price = int(text)
-            if update_service_field(service_id, 4, price):
-                bot.send_message(chat_id, f"✅ Цена изменена")
-        except:
-            pass
-        user_state[chat_id] = None
-        show_services_list(chat_id)
-        return
-    
-    elif state == "EDIT_APPT_SERVICE":
-        app_id = user_data[chat_id].get("edit_appt_id")
-        if update_appointment_field(app_id, 8, text):
-            bot.send_message(chat_id, f"✅ Услуга изменена")
-        user_state[chat_id] = None
-        app = get_appointment_by_id(app_id)
-        if app:
-            show_appointment_card(chat_id, app)
-        return
-    
-    elif state == "EDIT_APPT_PRICE":
-        app_id = user_data[chat_id].get("edit_appt_id")
-        try:
-            price = int(text)
-            if update_appointment_field(app_id, 9, price):
-                bot.send_message(chat_id, f"✅ Стоимость изменена")
-        except:
-            pass
-        user_state[chat_id] = None
-        app = get_appointment_by_id(app_id)
-        if app:
-            show_appointment_card(chat_id, app)
-        return
-    
-    elif state == "EDIT_APPT_NOTES":
-        app_id = user_data[chat_id].get("edit_appt_id")
-        if update_appointment_field(app_id, 11, text):
-            bot.send_message(chat_id, f"✅ Заметка сохранена")
-        user_state[chat_id] = None
-        app = get_appointment_by_id(app_id)
-        if app:
-            show_appointment_card(chat_id, app)
-        return
-    
-    elif state == "CANCEL_REASON":
-        app_id = user_data[chat_id].get("cancel_appt_id")
-        reason = text
-        if cancel_appointment(app_id, reason):
-            bot.send_message(chat_id, f"✅ Запись #{app_id} отменена")
-        else:
-            bot.send_message(chat_id, f"❌ Ошибка")
-        user_state[chat_id] = None
-        user_data[chat_id] = {}
-        bot.send_message(chat_id, "Главное меню:", reply_markup=main_menu())
-        return
-    
-    elif state == "SETTING_VALUE":
-        key = user_data[chat_id].get("setting_key")
-        if key:
-            update_setting(key, text)
-            bot.send_message(chat_id, f"✅ Настройка сохранена")
-        user_state[chat_id] = None
-        show_settings_menu(chat_id)
-        return
 
+# ==================== ФУНКЦИИ ОТОБРАЖЕНИЯ ====================
 def show_all_clients(chat_id):
     clients = get_all_clients()
     if not clients:
@@ -1215,7 +1084,7 @@ def show_client_card(chat_id, client):
     if history:
         msg += f"\n\n📋 **Последние записи:**\n"
         for app in sorted(history, key=lambda x: f"{x[1]} {x[2]}", reverse=True)[:5]:
-            status_icon = {"Ожидание": "🟡", "Выполнена": "✅", "Отмена": "❌", "Перенесена": "🔄", "Не пришёл": "⚠️"}.get(app[9], "")
+            status_icon = {"Ожидание": "🟡", "Выполнена": "✅", "Отмена": "❌", "Перенесена": "🔄"}.get(app[9], "")
             msg += f"{status_icon} {app[1]} {app[2]} — {app[7]} ({app[8]} BYN)\n"
     
     bot.send_message(chat_id, msg, reply_markup=client_card_keyboard(client['id']), parse_mode='Markdown')
@@ -1239,7 +1108,7 @@ def show_appointment_card(chat_id, app):
     msg += f"👤 {client_name}\n"
     if client_phone:
         msg += f"📞 {format_phone_for_markdown(client_phone)}\n"
-    msg += f"💇♀️ {app[7]}\n"
+    msg += f"💇‍♀️ {app[7]}\n"
     msg += f"📅 {app[1]} {app[2]}\n"
     msg += f"⏰ {app[3]} минут\n"
     msg += f"💰 {app[8]} BYN\n"
@@ -1254,7 +1123,7 @@ def show_services_list(chat_id):
     active = [s for s in services if s["active"]]
     inactive = [s for s in services if not s["active"]]
     
-    msg = "💇♀️ **Мои услуги**\n\n"
+    msg = "💇‍♀️ **Мои услуги**\n\n"
     msg += "🟢 **Активные:**\n"
     for s in active:
         msg += f"{s['id']}. {s['name']} — {s['duration']} мин / {s['price']} BYN\n"
@@ -1266,10 +1135,7 @@ def show_services_list(chat_id):
     
     kb = types.InlineKeyboardMarkup(row_width=1)
     for s in active:
-        kb.add(types.InlineKeyboardButton(
-            f"✏️ {s['name']}",
-            callback_data=f"service_edit_{s['id']}"
-        ))
+        kb.add(types.InlineKeyboardButton(f"✏️ {s['name']}", callback_data=f"service_edit_{s['id']}"))
     kb.add(
         types.InlineKeyboardButton("➕ Добавить услугу", callback_data="service_add"),
         types.InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
@@ -1284,8 +1150,8 @@ def show_service_selection(chat_id, services):
             f"{s['name']} — {s['duration']} мин / {s['price']} BYN",
             callback_data=f"appt_service_{s['id']}"
         ))
-    kb.add(types.InlineKeyboardButton("📝 Другая услуга (ввести)", callback_data="appt_service_manual"))
-    bot.send_message(chat_id, "💇♀️ Выберите услугу:", reply_markup=kb)
+    kb.add(types.InlineKeyboardButton("📝 Другая услуга", callback_data="appt_service_manual"))
+    bot.send_message(chat_id, "💇‍♀️ Выберите услугу:", reply_markup=kb)
 
 def show_statistics(chat_id):
     now = datetime.now()
@@ -1335,22 +1201,18 @@ def show_settings_menu(chat_id):
     msg = "⚙️ **Настройки**\n\n"
     msg += f"🏷️ Название: {get_setting('business_name', 'Мастер')}\n"
     msg += f"📍 Адрес: {get_setting('address', '—')}\n"
-    msg += f"⏰ Рабочие дни: {get_setting('work_days', 'Пн-Сб')}\n"
     msg += f"⏰ Часы: {get_setting('work_start', '10:00')} — {get_setting('work_end', '20:00')}\n"
     msg += f"⏱️ Перерыв: {get_setting('break_minutes', '10')} мин\n"
-    msg += f"⏰ Длительность по умолчанию: {get_setting('default_duration', '120')} мин\n"
-    msg += f"🔔 Напоминание клиенту: за {get_setting('reminder_client_hours', '24')} ч\n"
-    msg += f"🔔 Напоминание мастеру: за {get_setting('reminder_master_hours', '1')} ч"
+    msg += f"⏰ Длительность: {get_setting('default_duration', '120')} мин\n"
+    msg += f"🔔 Мастеру: за {get_setting('reminder_master_hours', '1')} ч"
     
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(
         types.InlineKeyboardButton("🏷️ Название", callback_data="setting_business_name"),
         types.InlineKeyboardButton("📍 Адрес", callback_data="setting_address"),
-        types.InlineKeyboardButton("⏰ Рабочие дни", callback_data="setting_work_days"),
-        types.InlineKeyboardButton("⏰ Часы работы", callback_data="setting_work_hours"),
+        types.InlineKeyboardButton("⏰ Часы", callback_data="setting_work_hours"),
         types.InlineKeyboardButton("⏱️ Перерыв", callback_data="setting_break"),
         types.InlineKeyboardButton("⏰ Длительность", callback_data="setting_duration"),
-        types.InlineKeyboardButton("🔔 Клиенту", callback_data="setting_reminder_client"),
         types.InlineKeyboardButton("🔔 Мастеру", callback_data="setting_reminder_master"),
         types.InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")
     )
@@ -1445,24 +1307,22 @@ def handle_callback(call):
         services = get_active_services()
         if services:
             show_service_selection(chat_id, services)
-            bot.edit_message_text("💇♀️ Выберите услугу:", chat_id, call.message.message_id)
+            bot.edit_message_text("💇‍♀️ Выберите услугу:", chat_id, call.message.message_id)
         else:
             user_state[chat_id] = "APPT_MANUAL_SERVICE"
-            bot.edit_message_text("💇♀️ Введите название услуги:", chat_id, call.message.message_id)
+            bot.edit_message_text("💇‍♀️ Введите название услуги:", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("appt_select_"):
         client_id = data.split("_")[2]
         user_data[chat_id] = {"appt_client_id": client_id}
-        client = get_client_by_id(client_id)
-        user_data[chat_id]["appt_client_name"] = client['name'] if client else ""
         services = get_active_services()
         if services:
             show_service_selection(chat_id, services)
-            bot.edit_message_text("💇♀️ Выберите услугу:", chat_id, call.message.message_id)
+            bot.edit_message_text("💇‍♀️ Выберите услугу:", chat_id, call.message.message_id)
         else:
             user_state[chat_id] = "APPT_MANUAL_SERVICE"
-            bot.edit_message_text("💇♀️ Введите название услуги:", chat_id, call.message.message_id)
+            bot.edit_message_text("💇‍♀️ Введите название услуги:", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data == "appt_new_client":
@@ -1485,7 +1345,7 @@ def handle_callback(call):
     
     elif data == "appt_service_manual":
         user_state[chat_id] = "APPT_MANUAL_SERVICE"
-        bot.edit_message_text("💇♀️ Введите название услуги:", chat_id, call.message.message_id)
+        bot.edit_message_text("💇‍♀️ Введите название услуги:", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("appt_date_"):
@@ -1499,13 +1359,13 @@ def handle_callback(call):
             for slot in free_slots[:9]:
                 kb.add(types.InlineKeyboardButton(slot, callback_data=f"appt_time_{slot}"))
             if len(free_slots) > 9:
-                kb.add(types.InlineKeyboardButton("Другое время (ввести)", callback_data="appt_time_manual"))
+                kb.add(types.InlineKeyboardButton("Другое время", callback_data="appt_time_manual"))
             bot.edit_message_text(f"🟢 Свободное время на {date_str}:", chat_id, call.message.message_id, reply_markup=kb)
         else:
             kb = types.InlineKeyboardMarkup()
             kb.add(types.InlineKeyboardButton("Ввести время вручную", callback_data="appt_time_manual"))
             kb.add(types.InlineKeyboardButton("🔙 Выбрать другую дату", callback_data="appt_back_to_cal"))
-            bot.edit_message_text(f"🟡 Нет свободных слотов на {date_str}.", chat_id, call.message.message_id, reply_markup=kb)
+            bot.edit_message_text(f"🟡 Нет свободных слотов.", chat_id, call.message.message_id, reply_markup=kb)
         bot.answer_callback_query(call.id)
     
     elif data == "appt_back_to_cal":
@@ -1515,7 +1375,7 @@ def handle_callback(call):
     
     elif data == "appt_time_manual":
         user_state[chat_id] = "APPT_TIME_MANUAL"
-        bot.edit_message_text("⏰ Введите время в формате ЧЧ:ММ (например, 14:00):", chat_id, call.message.message_id)
+        bot.edit_message_text("⏰ Введите время (ЧЧ:ММ):", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("appt_time_"):
@@ -1527,7 +1387,7 @@ def handle_callback(call):
         if available:
             user_data[chat_id]["appt_time"] = time_str
             user_state[chat_id] = "APPT_NOTES"
-            bot.edit_message_text("📝 Введите заметку к визиту (или '-' пропустить):", chat_id, call.message.message_id)
+            bot.edit_message_text("📝 Введите заметку (или '-'):", chat_id, call.message.message_id)
         else:
             bot.answer_callback_query(call.id, f"⛔ {reason}", show_alert=True)
         bot.answer_callback_query(call.id)
@@ -1555,7 +1415,7 @@ def handle_callback(call):
         reason = data.split("_")[2]
         app_id = user_data[chat_id].get("cancel_appt_id")
         if cancel_appointment(app_id, reason):
-            bot.edit_message_text(f"✅ Запись #{app_id} отменена ({reason})", chat_id, call.message.message_id)
+            bot.edit_message_text(f"✅ Запись #{app_id} отменена", chat_id, call.message.message_id)
         user_state[chat_id] = None
         bot.answer_callback_query(call.id)
     
@@ -1565,7 +1425,7 @@ def handle_callback(call):
         
         kb = types.InlineKeyboardMarkup(row_width=1)
         kb.add(
-            types.InlineKeyboardButton("💇♀️ Услуга", callback_data=f"app_edit_service_{app_id}"),
+            types.InlineKeyboardButton("💇‍♀️ Услуга", callback_data=f"app_edit_service_{app_id}"),
             types.InlineKeyboardButton("💰 Стоимость", callback_data=f"app_edit_price_{app_id}"),
             types.InlineKeyboardButton("📝 Заметка", callback_data=f"app_edit_notes_{app_id}")
         )
@@ -1576,7 +1436,7 @@ def handle_callback(call):
         app_id = data.split("_")[3]
         user_state[chat_id] = "EDIT_APPT_SERVICE"
         user_data[chat_id] = {"edit_appt_id": app_id}
-        bot.edit_message_text("💇♀️ Введите новое название услуги:", chat_id, call.message.message_id)
+        bot.edit_message_text("💇‍♀️ Введите новое название:", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("app_edit_price_"):
@@ -1614,9 +1474,9 @@ def handle_callback(call):
             kb = types.InlineKeyboardMarkup(row_width=3)
             for slot in free_slots[:9]:
                 kb.add(types.InlineKeyboardButton(slot, callback_data=f"reschedule_time_{slot}"))
-            bot.edit_message_text(f"🟢 Свободное время на {date_str}:", chat_id, call.message.message_id, reply_markup=kb)
+            bot.edit_message_text(f"🟢 Свободное время:", chat_id, call.message.message_id, reply_markup=kb)
         else:
-            bot.edit_message_text(f"🟡 Нет свободных слотов. Выберите другую дату.", chat_id, call.message.message_id)
+            bot.edit_message_text(f"🟡 Нет свободных слотов.", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("reschedule_time_"):
@@ -1626,9 +1486,9 @@ def handle_callback(call):
         
         new_id = reschedule_appointment(app_id, date_str, time_str)
         if new_id:
-            bot.edit_message_text(f"✅ Запись перенесена! Новая запись #{new_id}", chat_id, call.message.message_id)
+            bot.edit_message_text(f"✅ Перенесено! Новый # {new_id}", chat_id, call.message.message_id)
         else:
-            bot.edit_message_text(f"❌ Ошибка переноса", chat_id, call.message.message_id)
+            bot.edit_message_text(f"❌ Ошибка", chat_id, call.message.message_id)
         user_state[chat_id] = None
         user_data[chat_id] = {}
         bot.answer_callback_query(call.id)
@@ -1643,25 +1503,25 @@ def handle_callback(call):
             
             msg = f"✅ Вы записаны!\n\n"
             msg += f"📅 {app[1]} в {app[2]}\n"
-            msg += f"💇♀️ {app[7]}\n"
-            msg += f"⏰ Длительность: {app[3]} минут\n"
-            msg += f"💰 Стоимость: {app[8]} BYN\n"
+            msg += f"💇‍♀️ {app[7]}\n"
+            msg += f"⏰ {app[3]} минут\n"
+            msg += f"💰 {app[8]} BYN\n"
             if address:
-                msg += f"📍 Адрес: {address}\n"
-            msg += f"\nСпасибо за запись! ❤️\n{business_name}"
+                msg += f"📍 {address}\n"
+            msg += f"\n{business_name}"
             
             bot.send_message(chat_id, f"<pre>{msg}</pre>", parse_mode='HTML')
         bot.answer_callback_query(call.id)
     
     elif data == "service_add":
         user_state[chat_id] = "ADD_SERVICE_NAME"
-        bot.edit_message_text("💇♀️ Введите название услуги:", chat_id, call.message.message_id)
+        bot.edit_message_text("💇‍♀️ Введите название:", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("service_dur_"):
         if data == "service_dur_manual":
             user_state[chat_id] = "ADD_SERVICE_DURATION_MANUAL"
-            bot.edit_message_text("⏰ Введите длительность в минутах:", chat_id, call.message.message_id)
+            bot.edit_message_text("⏰ Введите минуты:", chat_id, call.message.message_id)
         else:
             duration = int(data.split("_")[2])
             user_data[chat_id]["new_service_duration"] = duration
@@ -1676,7 +1536,6 @@ def handle_callback(call):
             kb = types.InlineKeyboardMarkup(row_width=1)
             kb.add(
                 types.InlineKeyboardButton("✏️ Название", callback_data=f"service_editname_{service_id}"),
-                types.InlineKeyboardButton("⏰ Длительность", callback_data=f"service_editdur_{service_id}"),
                 types.InlineKeyboardButton("💰 Цена", callback_data=f"service_editprice_{service_id}"),
                 types.InlineKeyboardButton("🗑️ Удалить", callback_data=f"service_delete_{service_id}")
             )
@@ -1688,14 +1547,14 @@ def handle_callback(call):
         service_id = data.split("_")[2]
         user_state[chat_id] = "EDIT_SERVICE_NAME"
         user_data[chat_id] = {"edit_service_id": service_id}
-        bot.edit_message_text("✏️ Введите новое название:", chat_id, call.message.message_id)
+        bot.edit_message_text("✏️ Введите название:", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("service_editprice_"):
         service_id = data.split("_")[2]
         user_state[chat_id] = "EDIT_SERVICE_PRICE"
         user_data[chat_id] = {"edit_service_id": service_id}
-        bot.edit_message_text("💰 Введите новую цену:", chat_id, call.message.message_id)
+        bot.edit_message_text("💰 Введите цену:", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("service_delete_"):
@@ -1704,19 +1563,17 @@ def handle_callback(call):
         if service:
             kb = types.InlineKeyboardMarkup()
             kb.add(
-                types.InlineKeyboardButton("✅ Да, удалить", callback_data=f"service_delete_confirm_{service_id}"),
-                types.InlineKeyboardButton("❌ Отмена", callback_data="service_add")
+                types.InlineKeyboardButton("✅ Да", callback_data=f"service_delete_confirm_{service_id}"),
+                types.InlineKeyboardButton("❌ Нет", callback_data="service_add")
             )
-            bot.edit_message_text(f"🗑️ Удалить услугу '{service['name']}'?", chat_id, call.message.message_id, reply_markup=kb)
+            bot.edit_message_text(f"🗑️ Удалить '{service['name']}'?", chat_id, call.message.message_id, reply_markup=kb)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("service_delete_confirm_"):
         service_id = data.split("_")[3]
         if delete_service(service_id):
-            bot.edit_message_text("✅ Услуга удалена", chat_id, call.message.message_id)
+            bot.edit_message_text("✅ Удалено", chat_id, call.message.message_id)
             show_services_list(chat_id)
-        else:
-            bot.edit_message_text("❌ Ошибка", chat_id, call.message.message_id)
         bot.answer_callback_query(call.id)
     
     elif data.startswith("setting_"):
@@ -1725,14 +1582,12 @@ def handle_callback(call):
         user_data[chat_id] = {"setting_key": key}
         
         prompts = {
-            "business_name": "🏷️ Введите название студии/имя:",
-            "address": "📍 Введите адрес:",
-            "work_days": "📅 Введите рабочие дни (например: Пн,Вт,Ср,Чт,Пт,Сб):",
-            "work_hours": "⏰ Введите часы работы (например: 10:00-20:00):",
-            "break": "⏱️ Введите перерыв в минутах:",
-            "duration": "⏰ Введите длительность по умолчанию (мин):",
-            "reminder_client": "🔔 За сколько часов напоминать клиенту:",
-            "reminder_master": "🔔 За сколько часов напоминать мастеру:",
+            "business_name": "🏷️ Название:",
+            "address": "📍 Адрес:",
+            "work_hours": "⏰ Часы (10:00-20:00):",
+            "break": "⏱️ Перерыв (мин):",
+            "duration": "⏰ Длительность (мин):",
+            "reminder_master": "🔔 Напоминание мастеру (часов):",
         }
         
         prompt = prompts.get(key, "Введите значение:")
@@ -1761,15 +1616,15 @@ def main():
     for i in range(max_retries):
         try:
             requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
-            logger.info("✅ Старые вебхуки очищены")
+            logger.info("✅ Вебхуки очищены")
             time.sleep(2)
             break
         except Exception as e:
-            logger.warning(f"⚠️ Попытка {i+1}/{max_retries} не удалась: {e}")
+            logger.warning(f"⚠️ Попытка {i+1}/{max_retries}: {e}")
             time.sleep(3)
     
     threading.Thread(target=run_flask, daemon=True).start()
-    logger.info("🌐 API-сервер запущен")
+    logger.info("🌐 API и статика запущены")
     logger.info("🤖 Бот запущен...")
     
     while True:
@@ -1777,17 +1632,16 @@ def main():
             bot.polling(none_stop=True, timeout=60, long_polling_timeout=60)
         except Exception as e:
             error_str = str(e)
-            logger.error(f"❌ Ошибка polling: {e}")
+            logger.error(f"❌ Ошибка: {e}")
             
             if "409" in error_str or "Conflict" in error_str:
-                logger.info("🔄 Обнаружен конфликт, очищаем сессии...")
+                logger.info("🔄 Конфликт, очищаем...")
                 try:
                     requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
                     time.sleep(5)
                 except:
                     pass
             else:
-                logger.info("🔄 Перезапуск через 5 секунд...")
                 time.sleep(5)
 
 if __name__ == "__main__":
