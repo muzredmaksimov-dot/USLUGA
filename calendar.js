@@ -1,5 +1,7 @@
 // calendar.js
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Calendar page loaded');
+    
     const backBtn = document.getElementById('back-btn');
     const currentMonthEl = document.getElementById('current-month');
     const calendarDays = document.getElementById('calendar-days');
@@ -17,15 +19,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let freeSlots = [];
     
     const bookingData = loadData('booking');
+    console.log('Calendar - booking data:', bookingData);
+    
     if (!bookingData) {
+        console.error('No booking data in calendar');
         showToast('Ошибка: данные не найдены');
         setTimeout(() => window.location.href = 'index.html', 1500);
         return;
     }
     
     // Отображение информации о выбранной услуге
-    selectedServiceName.textContent = bookingData.service_name;
-    selectedServiceDetails.textContent = `${bookingData.duration} минут · ${bookingData.price} BYN`;
+    selectedServiceName.textContent = bookingData.service_name || 'Услуга';
+    selectedServiceDetails.textContent = `${bookingData.duration || 0} минут · ${bookingData.price || 0} BYN`;
     
     backBtn.addEventListener('click', () => {
         window.location.href = 'index.html';
@@ -80,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function selectDate(dateStr) {
+        console.log('Selected date:', dateStr);
         selectedDate = dateStr;
         selectedTime = null;
         continueBtn.disabled = true;
@@ -87,22 +93,26 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.calendar-day').forEach(d => d.classList.remove('selected'));
         document.querySelector(`[data-date="${dateStr}"]`)?.classList.add('selected');
         
-        // Загрузка свободных слотов
         timeSlots.innerHTML = '<div class="loading-state"><div class="spinner"></div><span>Загрузка времени...</span></div>';
         timeSection.style.display = 'block';
         
         try {
-            const response = await fetch(`${API_URL}/api/slots?date=${dateStr}&service_id=${bookingData.service_id}`);
+            const url = `${API_URL}/api/slots?date=${dateStr}&service_id=${bookingData.service_id}`;
+            console.log('Fetching slots:', url);
+            
+            const response = await fetch(url);
             const data = await response.json();
+            console.log('Slots response:', data);
+            
             freeSlots = data.slots || [];
             
             if (freeSlots.length === 0) {
-                timeSlots.innerHTML = '<div class="loading-state"><span>Нет свободного времени на эту дату</span></div>';
+                timeSlots.innerHTML = '<div class="loading-state"><span>Нет свободного времени</span></div>';
             } else {
                 renderTimeSlots();
             }
         } catch (error) {
-            console.error('Ошибка загрузки слотов:', error);
+            console.error('Error loading slots:', error);
             timeSlots.innerHTML = '<div class="loading-state"><span>Ошибка загрузки</span></div>';
         }
     }
@@ -118,9 +128,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 slot.classList.add('selected');
                 selectedTime = slot.dataset.time;
                 continueBtn.disabled = false;
+                console.log('Selected time:', selectedTime);
             });
         });
     }
+    
+    continueBtn.addEventListener('click', () => {
+        if (selectedDate && selectedTime) {
+            bookingData.date = selectedDate;
+            bookingData.time = selectedTime;
+            
+            // Сохраняем обновлённые данные
+            saveData('booking', bookingData);
+            console.log('Saved booking data:', bookingData);
+            
+            window.location.href = 'confirm.html';
+        }
+    });
     
     prevMonthBtn.addEventListener('click', () => {
         currentDate.setMonth(currentDate.getMonth() - 1);
@@ -132,25 +156,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     nextMonthBtn.addEventListener('click', () => {
-        const today = new Date();
-        const nextMonth = new Date(currentDate);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        
-        currentDate = nextMonth;
+        currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar();
         timeSection.style.display = 'none';
         selectedDate = null;
         selectedTime = null;
         continueBtn.disabled = true;
-    });
-    
-    continueBtn.addEventListener('click', () => {
-        if (selectedDate && selectedTime) {
-            bookingData.date = selectedDate;
-            bookingData.time = selectedTime;
-            saveData('booking', bookingData);
-            window.location.href = 'confirm.html';
-        }
     });
     
     renderCalendar();
